@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Voice Chat System</title>
+
+<style>
+body {
+    background: black;
+    color: white;
+    font-family: Arial;
+    margin: 0;
+}
+
+.lines {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    background-image: linear-gradient(#111 1px, transparent 1px),
+                      linear-gradient(90deg, #111 1px, transparent 1px);
+    background-size: 40px 40px;
+    z-index: -1;
+}
+
+.topbar {
+    background: #050505;
+    padding: 15px;
+    text-align: center;
+}
+
+.button {
+    background: #111;
+    color: white;
+    padding: 10px 20px;
+    border: 1px solid white;
+    cursor: pointer;
+}
+
+.button:hover {
+    background: white;
+    color: black;
+}
+
+#slots {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    padding: 20px;
+}
+
+.slot {
+    background: #090909;
+    border: 1px solid white;
+    height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#voiceChat {
+    display: none;
+    padding: 20px;
+}
+
+#profileImage {
+    width: 180px;
+    height: 180px;
+    border-radius: 25px;
+    border: 4px solid white;
+    display: block;
+}
+</style>
+
+</head>
+
+<body>
+
+<div class="lines"></div>
+
+<div class="topbar">
+    <button class="button" onmouseover="openVoiceChat()">
+        Voice Chat
+    </button>
+</div>
+
+<div id="menu">
+    <h2 style="text-align:center">Players in Server</h2>
+
+    <div id="slots">
+        <div class="slot" id="s1">Empty</div>
+        <div class="slot" id="s2">Empty</div>
+        <div class="slot" id="s3">Empty</div>
+        <div class="slot" id="s4">Empty</div>
+        <div class="slot" id="s5">Empty</div>
+        <div class="slot" id="s6">Empty</div>
+        <div class="slot" id="s7">Empty</div>
+        <div class="slot" id="s8">Empty</div>
+        <div class="slot" id="s9">Empty</div>
+        <div class="slot" id="s10">Empty</div>
+    </div>
+</div>
+
+<div id="voiceChat">
+
+    <div class="lines"></div>
+
+    <h2>Voice Chat Room</h2>
+
+    <button class="button" onclick="startChat()">Connect Mic</button>
+
+    <br><br>
+
+    <!-- IMAGE CHOOSER BACK AGAIN -->
+    <input type="file" id="fileInput">
+    <button class="button" onclick="saveImage()">Set As PFP</button>
+
+    <br><br>
+
+    <img id="profileImage" src="default.png">
+
+</div>
+
+<script>
+
+let socket = new WebSocket("ws://" + window.location.host);
+
+socket.onmessage = event => {
+    let data = JSON.parse(event.data);
+
+    if (data.type === "full") {
+        alert("Server full! Only 10 people allowed.");
+        return;
+    }
+
+    if (data.type === "join") {
+        updateSlots(data.count);
+    }
+
+    if (data.type === "image") {
+        document.getElementById("profileImage").src = data.data;
+    }
+};
+
+function updateSlots(count) {
+    for (let i = 1; i <= 10; i++) {
+        let slot = document.getElementById("s" + i);
+
+        if (i <= count) {
+            slot.innerText = "Player " + i;
+        } else {
+            slot.innerText = "Empty";
+        }
+    }
+}
+
+function openVoiceChat() {
+    document.getElementById("menu").style.display = "none";
+    document.getElementById("voiceChat").style.display = "block";
+}
+
+// ----- VOICE DETECTION -----
+
+async function startChat() {
+
+    let stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+    alert("Microphone Connected!");
+
+    let audioContext = new AudioContext();
+    let analyser = audioContext.createAnalyser();
+    let mic = audioContext.createMediaStreamSource(stream);
+
+    mic.connect(analyser);
+
+    analyser.fftSize = 512;
+
+    let dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+    function checkVoice() {
+        analyser.getByteFrequencyData(dataArray);
+
+        let volume = dataArray.reduce((a, b) => a + b) / dataArray.length;
+
+        let img = document.getElementById("profileImage");
+
+        if (volume > 10) {
+            img.style.border = "4px solid lime";
+        } else {
+            img.style.border = "4px solid white";
+        }
+
+        requestAnimationFrame(checkVoice);
+    }
+
+    checkVoice();
+}
+
+// ----- IMAGE SELECT SYSTEM -----
+
+function saveImage() {
+    let file = document.getElementById("fileInput").files[0];
+
+    if (!file) {
+        alert("Select an image first!");
+        return;
+    }
+
+    let reader = new FileReader();
+
+    reader.onload = function(e) {
+        let base64 = e.target.result;
+
+        document.getElementById("profileImage").src = base64;
+
+        socket.send(JSON.stringify({
+            type: "image",
+            data: base64
+        }));
+    };
+
+    reader.readAsDataURL(file);
+}
+
+</script>
+
+</body>
+</html>
